@@ -1,0 +1,24 @@
+= WHAT?
+
+Plain simple (-mostly- partially) (stolen) bindings for libcurl.
+
+= WHY?
+
+'Cause I want to. And other bindings have stuff I do not need/want/agree.
+
+= WHO'S TO BLAME?
+
+* "typhoeus":http://github.com/pauldix/typhoeus
+* "curb":http://github.com/taf2/curb
+
+I've pillage'd and plunder'd (tm) both. AND HERE WE ARE!
+
+= REALLY?
+
+Yes. I've used Net::HTTP for over a billion requests (literally) and now it's
+time to take it up a notch. libcurl is a very mature, stable and well tested project.
+ruby-curl is here to fetch the next billion requests.
+
+= SERIOUSLY!
+
+Thanks Todd Fisher and Paul Dix for the -code- inspiration. Seriously.
