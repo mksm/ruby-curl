@@ -1,11 +1,3 @@
-$LOAD_PATH.unshift(File.dirname(__FILE__) + "/../")
-
-require 'rubygems'
-require 'rack/utils'
-
-require 'rb_curl'
-require 'typhoeus/curl_options'
-
 module RubyCurl
   class Easy
 
