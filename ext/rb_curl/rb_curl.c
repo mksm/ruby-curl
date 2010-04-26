@@ -8,5 +8,5 @@ void Init_rb_curl() {
   curl_global_init(CURL_GLOBAL_NOTHING);
   
   init_rubycurl_easy();
-//  init_rubycurl_multi();
+  init_rubycurl_multi();
 }

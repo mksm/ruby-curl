@@ -4,8 +4,6 @@
 #include <rb_curl.h>
 #include <easy.h>
 
-VALUE cMulti;
-
 typedef struct {
   int running;
   int active;

@@ -1,6 +1,6 @@
 #include <multi.h>
 
-VALUE cMulti;
+VALUE rb_cMulti;
 
 static void multi_read_info(VALUE self, CURLM *multi_handle);
 
@@ -93,6 +93,7 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
       }
       multi_remove_handle(self, easy);
 
+      /*
       if (result != 0) {
         rb_funcall(easy, rb_intern("failure"), 0);
       }
@@ -102,6 +103,7 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
       else if (response_code >= 300 && response_code < 600) {
         rb_funcall(easy, rb_intern("failure"), 0);
       }
+      */
     }
   }
 }
@@ -197,7 +199,7 @@ static VALUE new(int argc, VALUE *argv, VALUE klass) {
   curl_multi->active = 0;
   curl_multi->running = 0;
 
-  VALUE multi = Data_Wrap_Struct(cMulti, 0, dealloc, curl_multi);
+  VALUE multi = Data_Wrap_Struct(rb_cMulti, 0, dealloc, curl_multi);
 
   rb_obj_call_init(multi, argc, argv);
 
@@ -205,13 +207,13 @@ static VALUE new(int argc, VALUE *argv, VALUE klass) {
 }
 
 void init_rubycurl_multi() {
-  rb_define_class_under(rb_mRubyCurl, "Multi", rb_cObject);
+  rb_cMulti = rb_define_class_under(rb_mRubyCurl, "Multi", rb_cObject);
 
-  rb_define_singleton_method(cMulti, "new", new, -1);
+  rb_define_singleton_method(rb_cMulti, "new", new, -1);
 
-  rb_define_private_method(cMulti, "multi_add_handle",    multi_add_handle,    1);
-  rb_define_private_method(cMulti, "multi_remove_handle", multi_remove_handle, 1);
-  rb_define_private_method(cMulti, "multi_perform",       multi_perform,       0);
-  rb_define_private_method(cMulti, "multi_cleanup",       multi_cleanup,       0);
-  rb_define_private_method(cMulti, "active_handle_count", active_handle_count, 0);
+  rb_define_private_method(rb_cMulti, "multi_add_handle",    multi_add_handle,    1);
+  rb_define_private_method(rb_cMulti, "multi_remove_handle", multi_remove_handle, 1);
+  rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       0);
+  rb_define_private_method(rb_cMulti, "multi_cleanup",       multi_cleanup,       0);
+  rb_define_private_method(rb_cMulti, "active_handle_count", active_handle_count, 0);
 }
