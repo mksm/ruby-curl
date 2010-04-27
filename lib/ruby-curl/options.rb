@@ -696,4 +696,37 @@ module RubyCurl
     end
 
   end
+
+
+  class Multi
+
+    #
+    #CURLMOPT_SOCKETFUNCTION = CURLOPTTYPE_FUNCTIONPOINT + 1
+  
+    # This is the argument passed to the socket callback
+    #CURLMOPT_SOCKETDATA = CURLOPTTYPE_OBJECTPOINT + 2
+  
+    # set to 1 to enable pipelining for this multi handle
+    CURLMOPT_PIPELINING = CURLOPTTYPE_LONG + 3
+  
+    # This is the timer callback function pointer
+    #CURLMOPT_TIMERFUNCTION = CURLOPTTYPE_FUNCTIONPOINT + 4
+  
+    # This is the argument passed to the timer callback
+    #CURLMOPT_TIMERDATA = CURLOPTTYPE_OBJECTPOINT + 5
+  
+    # maximum number of entries in the connection cache
+    CURLMOPT_MAXCONNECTS = CURLOPTTYPE_LONG + 6
+   
+    private
+
+    def set_option(option, value)
+      if (0..10000).include?(option) and not value.class == Fixnum
+        raise ArgumentError, "invalid option value class => '#{value.class}'"
+      else
+        multi_setopt_long(option, value)
+      end
+    end
+ 
+  end
 end

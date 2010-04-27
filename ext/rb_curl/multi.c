@@ -2,47 +2,71 @@
 
 VALUE rb_cMulti;
 
-static void multi_read_info(VALUE self, CURLM *multi_handle);
-
 static void dealloc(CurlMulti *curl_multi) {
   curl_multi_cleanup(curl_multi->multi);
   free(curl_multi);
 }
 
-static VALUE multi_add_handle(VALUE self, VALUE easy) {
-  CurlEasy *curl_easy;
-  Data_Get_Struct(easy, CurlEasy, curl_easy);
+
+/*
+ * curl_multi_add_handle
+ */
+static VALUE rb_multi_add_handle(VALUE rb_self, VALUE rb_easy) {
+  CurlEasy  *curl_easy;
   CurlMulti *curl_multi;
-  Data_Get_Struct(self, CurlMulti, curl_multi);
-  CURLMcode mcode;
+  Data_Get_Struct(rb_easy, CurlEasy,  curl_easy);
+  Data_Get_Struct(rb_self, CurlMulti, curl_multi);
 
-  mcode = curl_multi_add_handle(curl_multi->multi, curl_easy->curl);
-  if (mcode != CURLM_CALL_MULTI_PERFORM && mcode != CURLM_OK) {
-    rb_raise((VALUE)mcode, "An error occured adding the handle");
-  }
+  CURLMcode multi_code;
+  multi_code = curl_multi_add_handle(curl_multi->multi, curl_easy->curl);
 
-  curl_easy_setopt(curl_easy->curl, CURLOPT_PRIVATE, easy);
-  curl_multi->active++;
+  if (multi_code != CURLM_OK && multi_code != CURLM_CALL_MULTI_PERFORM) {
+    //error
+  };
 
-  if (mcode == CURLM_CALL_MULTI_PERFORM) {
-    curl_multi_perform(curl_multi->multi, &(curl_multi->running));
-  }
-
-  return easy;
+  return rb_easy;
 }
 
-static VALUE multi_remove_handle(VALUE self, VALUE easy) {
-  CurlEasy *curl_easy;
-  Data_Get_Struct(easy, CurlEasy, curl_easy);
+
+/*
+ * curl_multi_remove_handle
+ */
+static VALUE rb_multi_remove_handle(VALUE rb_self, VALUE rb_easy) {
+  CurlEasy  *curl_easy;
+  CurlMulti *curl_multi;
+  Data_Get_Struct(rb_easy, CurlEasy,  curl_easy);
+  Data_Get_Struct(rb_self, CurlMulti, curl_multi);
+
+  CURLMcode multi_code;
+  multi_code = curl_multi_remove_handle(curl_multi->multi, curl_easy->curl);
+
+  if (multi_code != CURLM_OK && multi_code != CURLM_CALL_MULTI_PERFORM) {
+    //error
+  };
+
+  return rb_easy;
+}
+
+
+/*
+ * curl_multi_setopt
+ */
+static VALUE rb_multi_setopt_long(VALUE self, VALUE opt_name, VALUE parameter) {
   CurlMulti *curl_multi;
   Data_Get_Struct(self, CurlMulti, curl_multi);
 
-  curl_multi->active--;
-  curl_multi_remove_handle(curl_multi->multi, curl_easy->curl);
+  long opt = NUM2LONG(opt_name);
+  curl_multi_setopt(curl_multi->multi, opt, NUM2LONG(parameter));
 
-  return easy;
+  return opt_name;
 }
 
+
+/*
+ * ****************************************************************************
+ * Still old stuff from typhoeus
+ * ****************************************************************************
+ */
 static void multi_read_info(VALUE self, CURLM *multi_handle) {
   int msgs_left, result;
   CURLMsg *msg;
@@ -77,21 +101,24 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
       // This is caused by OS X first attempting to resolve using IPV6.
       // Hack solution: connect to yourself with 127.0.0.1, not localhost
       // http://curl.haxx.se/mail/tracker-2009-09/0018.html
+      /*
       if (result == 7) {
         VALUE max_retries = rb_funcall(easy, rb_intern("max_retries?"), 0);
         if (max_retries != Qtrue) {
-          multi_remove_handle(self, easy);
-          multi_add_handle(self, easy);
+          rb_multi_remove_handle(self, easy);
+          rb_multi_add_handle(self, easy);
           CurlMulti *curl_multi;
           Data_Get_Struct(self, CurlMulti, curl_multi);
-          curl_multi_perform(curl_multi->multi, &(curl_multi->running));
+          int running;
+          curl_multi_perform(curl_multi->multi, &running);
 
           rb_funcall(easy, rb_intern("increment_retries"), 0);
 
           continue;
         }
       }
-      multi_remove_handle(self, easy);
+      */
+      rb_multi_remove_handle(self, easy);
 
       /*
       if (result != 0) {
@@ -108,7 +135,7 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
   }
 }
 
-/* called by multi_perform */
+/* called by multi_perform and fire_and_forget */
 static void rb_curl_multi_run(VALUE self, CURLM *multi_handle, int *still_running) {
   CURLMcode mcode;
 
@@ -134,8 +161,9 @@ static VALUE multi_perform(VALUE self) {
 
   Data_Get_Struct(self, CurlMulti, curl_multi);
 
-  rb_curl_multi_run( self, curl_multi->multi, &(curl_multi->running) );
-  while(curl_multi->running) {
+  int running;
+  rb_curl_multi_run( self, curl_multi->multi, &running );
+  while(running) {
     FD_ZERO(&fdread);
     FD_ZERO(&fdwrite);
     FD_ZERO(&fdexcep);
@@ -147,7 +175,7 @@ static VALUE multi_perform(VALUE self) {
           }
 
     if (timeout == 0) { /* no delay */
-      rb_curl_multi_run( self, curl_multi->multi, &(curl_multi->running) );
+      rb_curl_multi_run( self, curl_multi->multi, &running );
       continue;
     }
     else if (timeout < 0) {
@@ -167,53 +195,47 @@ static VALUE multi_perform(VALUE self) {
     if (rc < 0) {
       rb_raise(rb_eRuntimeError, "error on thread select");
     }
-    rb_curl_multi_run( self, curl_multi->multi, &(curl_multi->running) );
+    rb_curl_multi_run( self, curl_multi->multi, &running );
 
   }
 
   return Qnil;
 }
 
-static VALUE active_handle_count(VALUE self) {
+
+/*
+ * rb_initialize
+ */
+static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
   CurlMulti *curl_multi;
-  Data_Get_Struct(self, CurlMulti, curl_multi);
+  VALUE     rb_multi;
 
-  return INT2NUM(curl_multi->active);
-}
-
-static VALUE multi_cleanup(VALUE self) {
-  CurlMulti *curl_multi;
-  Data_Get_Struct(self, CurlMulti, curl_multi);
-
-  curl_multi_cleanup(curl_multi->multi);
-  curl_multi->active = 0;
-  curl_multi->running = 0;
-
-  return Qnil;
-}
-
-static VALUE new(int argc, VALUE *argv, VALUE klass) {
-  CurlMulti *curl_multi = ALLOC(CurlMulti);
-
+  curl_multi = ALLOC(CurlMulti);  
   curl_multi->multi = curl_multi_init();
-  curl_multi->active = 0;
-  curl_multi->running = 0;
 
-  VALUE multi = Data_Wrap_Struct(rb_cMulti, 0, dealloc, curl_multi);
+  rb_multi = Data_Wrap_Struct(rb_cMulti, 0, dealloc, curl_multi);
 
-  rb_obj_call_init(multi, argc, argv);
+  // pass arguments to ruby object
+  rb_obj_call_init(rb_multi, argc, argv);
 
-  return multi;
+  return rb_multi;
 }
 
+
+/*
+ * Ruby interface
+ */
 void init_rubycurl_multi() {
   rb_cMulti = rb_define_class_under(rb_mRubyCurl, "Multi", rb_cObject);
 
-  rb_define_singleton_method(rb_cMulti, "new", new, -1);
+  rb_define_singleton_method(rb_cMulti, "new", rb_initialize, -1);
 
-  rb_define_private_method(rb_cMulti, "multi_add_handle",    multi_add_handle,    1);
-  rb_define_private_method(rb_cMulti, "multi_remove_handle", multi_remove_handle, 1);
+  rb_define_private_method(rb_cMulti, "multi_add_handle",    rb_multi_add_handle,    1);
+  rb_define_private_method(rb_cMulti, "multi_remove_handle", rb_multi_remove_handle, 1);
+
+  rb_define_private_method(rb_cMulti, "multi_setopt_long",   rb_multi_setopt_long,   2);
+
   rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       0);
-  rb_define_private_method(rb_cMulti, "multi_cleanup",       multi_cleanup,       0);
-  rb_define_private_method(rb_cMulti, "active_handle_count", active_handle_count, 0);
+  //rb_define_private_method(rb_cMulti, "multi_cleanup",       multi_cleanup,       0);
+  //rb_define_private_method(rb_cMulti, "active_handle_count", active_handle_count, 0);
 }
