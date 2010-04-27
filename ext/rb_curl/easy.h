@@ -8,6 +8,4 @@ typedef struct {
   struct curl_slist *headers;
 } CurlEasy;
 
-void init_rubycurl_easy();
-
 #endif

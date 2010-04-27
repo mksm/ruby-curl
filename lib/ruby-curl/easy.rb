@@ -8,10 +8,10 @@ module RubyCurl
       :name_lookup_time        => CURLINFO_NAMELOOKUP_TIME,
       :connect_time            => CURLINFO_CONNECT_TIME,
       :pretransfer_time        => CURLINFO_PRETRANSFER_TIME,
-      :size_upload             => CURLINFO_SIZE_UPLOAD,
-      :size_download           => CURLINFO_SIZE_DOWNLOAD,
-      :speed_upload            => CURLINFO_SPEED_DOWNLOAD,
-      :speed_download          => CURLINFO_SPEED_UPLOAD,
+      :upload_size             => CURLINFO_SIZE_UPLOAD,
+      :download_size           => CURLINFO_SIZE_DOWNLOAD,
+      :upload_speed            => CURLINFO_SPEED_UPLOAD,
+      :download_speed          => CURLINFO_SPEED_DOWNLOAD,
       :header_size             => CURLINFO_HEADER_SIZE,
       :request_size            => CURLINFO_REQUEST_SIZE,
       :ssl_verify_result       => CURLINFO_SSL_VERIFYRESULT,
@@ -46,6 +46,8 @@ module RubyCurl
                 :auto_referer,      :verbose,         :follow_location,
                 :max_redirects,     :read_timeout_ms, :connect_timeout_ms,
                 :dns_cache_timeout, :interface
+
+    attr_reader :body_str, :header_str
 
     def initialize(arg_url = nil, arg_method = nil, arg_params = {})
       url                 = arg_url
