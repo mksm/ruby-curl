@@ -92,7 +92,13 @@ static VALUE easy_perform(VALUE self) {
   if (rcode > 0)
     rb_exc_raise(rb_str_new2(curl_easy_strerror(rcode)));
 
-  return self;
+  // Cleanup headers list
+  if (curl_easy->headers != NULL) {
+    curl_slist_free_all(curl_easy->headers);
+    curl_easy->headers = NULL;
+  }
+
+  return Qtrue;
 }
 
 
@@ -112,11 +118,7 @@ static VALUE easy_setopt_httpheader(VALUE self) {
   CurlEasy *curl_easy;
   Data_Get_Struct(self, CurlEasy, curl_easy);
 
-  if (curl_easy->headers != NULL) {
-    curl_easy_setopt(curl_easy->curl, CURLOPT_HTTPHEADER, curl_easy->headers);
-    curl_slist_free_all(curl_easy->headers);
-    curl_easy->headers = NULL;
-  }
+  curl_easy_setopt(curl_easy->curl, CURLOPT_HTTPHEADER, curl_easy->headers);
 
   return Qnil;
 }
@@ -187,5 +189,5 @@ void init_rubycurl_easy() {
   rb_define_private_method(rb_cEasy, "easy_perform",            easy_perform,           0);
 
   rb_define_private_method(rb_cEasy, "easy_append_header",      easy_append_header,     1);
-  rb_define_private_method(rb_cEasy, "easy_setopt_httpheaders", easy_setopt_httpheader, 0);
+  rb_define_private_method(rb_cEasy, "easy_setopt_httpheader",  easy_setopt_httpheader, 0);
 }
