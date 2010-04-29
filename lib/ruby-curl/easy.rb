@@ -4,22 +4,11 @@ module RubyCurl
     include Options
     include Info
 
-    attr_reader   :method, :headers
+    attr_reader   :method, :headers, :header_str, :body_str
     attr_accessor :use_cookies, :save_cookies
 
     def initialize
       @headers = {}
-    end
-
-    def method_missing(method, *args)
-      if Options::METHOD_MAP[method]
-        instance_variable_get("@#{method}")
-      elsif method.to_s =~ /(\w+)=$/
-        set_option(Options::METHOD_MAP[$1.to_sym], *args)
-        instance_variable_set("@#{$1}", *args)
-      else
-        super
-      end
     end
 
     def get(url, params = nil, options = {})

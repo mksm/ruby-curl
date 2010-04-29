@@ -91,6 +91,10 @@ module RubyCurl
         :rtsp_cseq_recv          => CURLINFO_RTSP_CSEQ_RECV
       }
 
+      METHOD_MAP.each do |method, flag|
+        define_method(method) { get_info(flag) }
+      end
+
       private
   
       def get_info(flag)
