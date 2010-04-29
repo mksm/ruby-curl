@@ -86,9 +86,13 @@ static VALUE easy_perform(VALUE self) {
   CurlEasy *curl_easy;
   Data_Get_Struct(self, CurlEasy, curl_easy);
 
-  curl_easy_perform(curl_easy->curl);
+  CURLcode rcode;
+  rcode = curl_easy_perform(curl_easy->curl);
 
-  return Qnil;
+  if (rcode > 0)
+    rb_exc_raise(rb_str_new2(curl_easy_strerror(rcode)));
+
+  return self;
 }
 
 
