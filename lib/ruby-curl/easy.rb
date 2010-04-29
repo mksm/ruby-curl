@@ -5,7 +5,7 @@ module RubyCurl
     include Info
 
     attr_reader   :method, :headers, :jar, :header_str, :body_str
-    attr_accessor :use_cookies, :save_cookies
+    attr_accessor :multi, :use_cookies, :save_cookies
 
     def initialize
       @headers = {}
@@ -44,7 +44,13 @@ module RubyCurl
 
       @headers.each { |k, v| easy_append_header("%s: %s" % [k,v]) }
       easy_setopt_httpheader
-      easy_perform
+
+      if @multi
+        @multi.add(self)
+        @multi.perform
+      else
+        easy_perform
+      end
 
       if @save_cookies and headers_hash['Set-Cookie']
         @jar << headers_hash['Set-Cookie']
