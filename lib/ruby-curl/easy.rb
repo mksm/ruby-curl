@@ -4,7 +4,7 @@ module RubyCurl
     include Options
     include Info
 
-    attr_reader   :method, :headers, :header_str, :body_str
+    attr_reader   :method, :headers, :jar, :header_str, :body_str
     attr_accessor :use_cookies, :save_cookies
 
     def initialize
