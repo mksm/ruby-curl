@@ -5,9 +5,10 @@ module RubyCurl
   CURLOPTTYPE_FUNCTIONPOINT = 20000
 
   class Easy
+    module Options
 
     # The full URL to get/put 
-    CURLOPT_URL  = CURLOPTTYPE_OBJECTPOINT + 2
+    CURLOPT_URL = CURLOPTTYPE_OBJECTPOINT + 2
   
     # Port number to connect to, if other than default.
     # CURLOPT_PORT = CURLOPTTYPE_LONG + 3
@@ -111,7 +112,7 @@ module RubyCurl
   
     # point to a file to read the initial cookies from, also enables
     # "cookie awareness"
-    CURLOPT_COOKIEFILE = CURLOPTTYPE_OBJECTPOINT + 31
+    # CURLOPT_COOKIEFILE = CURLOPTTYPE_OBJECTPOINT + 31
   
     # What version to specifically try to use.
     # See CURL_SSLVERSION defines below.
@@ -129,7 +130,7 @@ module RubyCurl
     # Custom request, for customizing the get commandlike
     # HTTP: DELETE, TRACE and others
     # FTP: to use a different list command
-    CURLOPT_CUSTOMREQUEST = CURLOPTTYPE_OBJECTPOINT + 36
+    # CURLOPT_CUSTOMREQUEST = CURLOPTTYPE_OBJECTPOINT + 36
   
     # HTTP request, for odd commands like DELETE, TRACE and others
     # CURLOPT_STDERR = CURLOPTTYPE_OBJECTPOINT + 37
@@ -150,7 +151,7 @@ module RubyCurl
     # CURLOPT_HEADER = CURLOPTTYPE_LONG + 42
 
     # Shut off the built-in progress meter completely.
-    CURLOPT_NOPROGRESS = CURLOPTTYPE_LONG + 43
+    # CURLOPT_NOPROGRESS = CURLOPTTYPE_LONG + 43
 
     # Do not include the body-part in the output.
     # On HTTP(S) servers, this will make libcurl do a HEAD request.
@@ -290,7 +291,7 @@ module RubyCurl
   
     # Specify which file name to write all known cookies in after completed
     # operation. Set file name to "-" (dash) to make it go to stdout.
-    CURLOPT_COOKIEJAR = CURLOPTTYPE_OBJECTPOINT + 82
+    # CURLOPT_COOKIEJAR = CURLOPTTYPE_OBJECTPOINT + 82
   
     # Specify which SSL ciphers to use
     # CURLOPT_SSL_CIPHER_LIST = CURLOPTTYPE_OBJECTPOINT + 83
@@ -337,7 +338,7 @@ module RubyCurl
     # CURLOPT_DEBUGDATA = CURLOPTTYPE_OBJECTPOINT + 95
   
     # mark this as start of a cookie session
-    CURLOPT_COOKIESESSION = CURLOPTTYPE_LONG + 96
+    # CURLOPT_COOKIESESSION = CURLOPTTYPE_LONG + 96
   
     # The CApath directory used to validate the peer certificate
     # this option is used only if SSL_VERIFYPEER is true
@@ -481,7 +482,7 @@ module RubyCurl
     # CURLOPT_FTP_ACCOUNT = CURLOPTTYPE_OBJECTPOINT + 134
   
     # feed cookies into cookie engine
-    CURLOPT_COOKIELIST = CURLOPTTYPE_OBJECTPOINT + 135
+    # CURLOPT_COOKIELIST = CURLOPTTYPE_OBJECTPOINT + 135
   
     # ignore Content-Length
     # CURLOPT_IGNORE_CONTENT_LENGTH = CURLOPTTYPE_LONG + 136
@@ -628,7 +629,7 @@ module RubyCurl
     # transfer, which thus helps the app which takes URLs from users or other
     # external inputs and want to restrict what protocol(s) to deal
     # with. Defaults to CURLPROTO_ALL.
-    CURLOPT_PROTOCOLS = CURLOPTTYPE_LONG + 181
+    # CURLOPT_PROTOCOLS = CURLOPTTYPE_LONG + 181
   
     # set the bitmask for the protocols that libcurl is allowed to follow to,
     # as a subset of the CURLOPT_PROTOCOLS ones. That means the protocol
@@ -679,14 +680,29 @@ module RubyCurl
     # Let the application define a custom write method for RTP data
     # CURLOPT_INTERLEAVEFUNCTION = CURLOPTTYPE_FUNCTIONPOINT + 196
 
+    METHOD_MAP = {
+      :url                => CURLOPT_URL,
+      :post_fields        => CURLOPT_POSTFIELDS,
+      :auto_referer       => CURLOPT_AUTOREFERER,
+      :verbose            => CURLOPT_VERBOSE,
+      :follow_location    => CURLOPT_FOLLOWLOCATION,
+      :max_redirects      => CURLOPT_MAXREDIRS,
+      :read_timeouts_ms   => CURLOPT_TIMEOUT_MS,
+      :connect_timeout_ms => CURLOPT_CONNECTTIMEOUT_MS,
+      :dns_cache_timeout  => CURLOPT_DNS_CACHE_TIMEOUT,
+      :no_signal          => CURLOPT_NOSIGNAL,
+      :interface          => CURLOPT_INTERFACE
+    }
+        
     private
 
     def set_option(option, value)
       if (0    ..10000).include?(option) and not value.class == Fixnum \
-      or (10000..20000).include?(option) and not value.class == String
+      or (10000..20000).include?(option) and not value.class == String \
+      or not option
         raise ArgumentError, "invalid option value class => '#{value.class}'"
       end
-  
+
       case option
       when 0 .. 10000
         easy_setopt_long(option, value)
@@ -694,7 +710,7 @@ module RubyCurl
         easy_setopt_string(option, value)
       end   
     end
-
+  end
   end
 
 
