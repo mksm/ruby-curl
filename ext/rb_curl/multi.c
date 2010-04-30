@@ -135,24 +135,26 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
   }
 }
 
-/* called by multi_perform and fire_and_forget */
-static void rb_curl_multi_run(VALUE self, CURLM *multi_handle, int *still_running) {
-  CURLMcode mcode;
+static int multi_finished_easy(CURLM *multi_handle, CURL *easy_handle) {
+  CURLMsg *msg;
+  int msgs_left;
 
-  do {
-    mcode = curl_multi_perform(multi_handle, still_running);
-  } while (mcode == CURLM_CALL_MULTI_PERFORM);
+  /* check for finished easy handles and remove from the multi handle */
+  while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
 
-  if (mcode != CURLM_OK) {
-    rb_raise((VALUE)mcode, "an error occured while running perform");
+    if(msg->easy_handle == easy_handle && msg->msg == CURLMSG_DONE) {
+      return 1;
+    }
+    else 
+      continue;
   }
-
-  multi_read_info( self, multi_handle );
+  return 0;
 }
 
-static VALUE multi_perform(VALUE self) {
+static VALUE multi_perform(VALUE self, VALUE rb_easy) {
   CURLMcode mcode;
   CurlMulti *curl_multi;
+  CurlEasy  *curl_easy;
   int maxfd, rc;
   fd_set fdread, fdwrite, fdexcep;
 
@@ -160,9 +162,22 @@ static VALUE multi_perform(VALUE self) {
   struct timeval tv = {0, 0};
 
   Data_Get_Struct(self, CurlMulti, curl_multi);
+  Data_Get_Struct(rb_easy, CurlEasy, curl_easy);
 
   int running;
-  rb_curl_multi_run( self, curl_multi->multi, &running );
+  //rb_curl_multi_run( self, curl_multi->multi, &running );
+  // multi run
+  while (1) {
+    curl_multi_perform(curl_multi->multi, &running);
+     // procura pelo easy ja terminado
+    if(multi_finished_easy(curl_multi->multi, curl_easy->curl)) {
+      rb_multi_remove_handle(self, rb_easy);
+      break;
+    }
+  }
+  // end multi run
+  
+  running = 0;
   while(running) {
     FD_ZERO(&fdread);
     FD_ZERO(&fdwrite);
@@ -204,9 +219,9 @@ static VALUE multi_perform(VALUE self) {
 
 
 /*
- * rb_initialize
+ * rb_new
  */
-static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
+static VALUE rb_new(int argc, VALUE *argv, VALUE klass) {
   CurlMulti *curl_multi;
   VALUE     rb_multi;
 
@@ -228,14 +243,14 @@ static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
 void init_rubycurl_multi() {
   rb_cMulti = rb_define_class_under(rb_mRubyCurl, "Multi", rb_cObject);
 
-  rb_define_singleton_method(rb_cMulti, "new", rb_initialize, -1);
+  rb_define_singleton_method(rb_cMulti, "new", rb_new, -1);
 
   rb_define_private_method(rb_cMulti, "multi_add_handle",    rb_multi_add_handle,    1);
   rb_define_private_method(rb_cMulti, "multi_remove_handle", rb_multi_remove_handle, 1);
 
   rb_define_private_method(rb_cMulti, "multi_setopt_long",   rb_multi_setopt_long,   2);
 
-  rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       0);
+  rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       1);
   //rb_define_private_method(rb_cMulti, "multi_cleanup",       multi_cleanup,       0);
   //rb_define_private_method(rb_cMulti, "active_handle_count", active_handle_count, 0);
 }

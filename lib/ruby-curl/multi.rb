@@ -13,8 +13,8 @@ module RubyCurl
       multi_remove_handle(easy)
     end
 
-    def perform
-      multi_perform
+    def perform(e)
+      multi_perform(e)
     end
 
     def cleanup
