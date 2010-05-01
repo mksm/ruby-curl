@@ -62,4 +62,4 @@ else
     )
 end
 
-create_makefile("typhoeus/rb_curl")
+create_makefile("rb_curl")
