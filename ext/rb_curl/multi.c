@@ -11,17 +11,17 @@ static void dealloc(CurlMulti *curl_multi) {
 /*
  * curl_multi_add_handle
  */
-static VALUE rb_multi_add_handle(VALUE rb_self, VALUE rb_easy) {
+static VALUE rb_multi_add_handle(VALUE rb_self, VALUE rb_easy)
+{
   CurlEasy  *curl_easy;
   CurlMulti *curl_multi;
-  Data_Get_Struct(rb_easy, CurlEasy,  curl_easy);
+  Data_Get_Struct(rb_easy, CurlEasy, curl_easy);
   Data_Get_Struct(rb_self, CurlMulti, curl_multi);
 
-  CURLMcode multi_code;
-  multi_code = curl_multi_add_handle(curl_multi->multi, curl_easy->curl);
+  CURLMcode multi_code = curl_multi_add_handle(curl_multi->multi, curl_easy->curl);
 
   if (multi_code != CURLM_OK && multi_code != CURLM_CALL_MULTI_PERFORM) {
-    //error
+    rb_exc_raise(rb_str_new2(curl_multi_strerror(multi_code)));
   };
 
   return rb_easy;
@@ -37,8 +37,7 @@ static VALUE rb_multi_remove_handle(VALUE rb_self, VALUE rb_easy) {
   Data_Get_Struct(rb_easy, CurlEasy,  curl_easy);
   Data_Get_Struct(rb_self, CurlMulti, curl_multi);
 
-  CURLMcode multi_code;
-  multi_code = curl_multi_remove_handle(curl_multi->multi, curl_easy->curl);
+  CURLMcode multi_code = curl_multi_remove_handle(curl_multi->multi, curl_easy->curl);
 
   if (multi_code != CURLM_OK && multi_code != CURLM_CALL_MULTI_PERFORM) {
     //error
@@ -67,6 +66,7 @@ static VALUE rb_multi_setopt_long(VALUE self, VALUE opt_name, VALUE parameter) {
  * Still old stuff from typhoeus
  * ****************************************************************************
  */
+
 static void multi_read_info(VALUE self, CURLM *multi_handle) {
   int msgs_left, result;
   CURLMsg *msg;
@@ -89,35 +89,6 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
         rb_raise(ecode, "error getting easy object");
       }
 
-      long response_code = -1;
-      curl_easy_getinfo(easy_handle, CURLINFO_RESPONSE_CODE, &response_code);
-
-      // TODO: find out what the real problem is here and fix it.
-      // this next bit is a horrible hack. For some reason my tests against a local server on my laptop
-      // fail intermittently and return this result number. However, it will succeed if you try it a few
-      // more times. Also noteworthy is that this doens't happen when hitting an external server. WTF?!
-
-      // Sandofsky says:
-      // This is caused by OS X first attempting to resolve using IPV6.
-      // Hack solution: connect to yourself with 127.0.0.1, not localhost
-      // http://curl.haxx.se/mail/tracker-2009-09/0018.html
-      /*
-      if (result == 7) {
-        VALUE max_retries = rb_funcall(easy, rb_intern("max_retries?"), 0);
-        if (max_retries != Qtrue) {
-          rb_multi_remove_handle(self, easy);
-          rb_multi_add_handle(self, easy);
-          CurlMulti *curl_multi;
-          Data_Get_Struct(self, CurlMulti, curl_multi);
-          int running;
-          curl_multi_perform(curl_multi->multi, &running);
-
-          rb_funcall(easy, rb_intern("increment_retries"), 0);
-
-          continue;
-        }
-      }
-      */
       rb_multi_remove_handle(self, easy);
 
       /*
@@ -135,23 +106,23 @@ static void multi_read_info(VALUE self, CURLM *multi_handle) {
   }
 }
 
-static int multi_finished_easy(CURLM *multi_handle, CURL *easy_handle) {
-  CURLMsg *msg;
-  int msgs_left;
+/* called by multi_perform and fire_and_forget */
+static void rb_curl_multi_run(VALUE self, CURLM *multi_handle, int *still_running) {
+  CURLMcode mcode;
 
-  /* check for finished easy handles and remove from the multi handle */
-  while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
+  do {
+    mcode = curl_multi_perform(multi_handle, still_running);
+  } while (mcode == CURLM_CALL_MULTI_PERFORM);
 
-    if(msg->easy_handle == easy_handle && msg->msg == CURLMSG_DONE) {
-      return 1;
-    }
-    else 
-      continue;
+  if (mcode != CURLM_OK) {
+    rb_raise((VALUE)mcode, "an error occured while running perform");
   }
-  return 0;
+
+  multi_read_info( self, multi_handle );
 }
 
-static VALUE multi_perform(VALUE self, VALUE rb_easy) {
+
+static VALUE multi_perform(VALUE self) {
   CURLMcode mcode;
   CurlMulti *curl_multi;
   CurlEasy  *curl_easy;
@@ -162,22 +133,10 @@ static VALUE multi_perform(VALUE self, VALUE rb_easy) {
   struct timeval tv = {0, 0};
 
   Data_Get_Struct(self, CurlMulti, curl_multi);
-  Data_Get_Struct(rb_easy, CurlEasy, curl_easy);
 
   int running;
-  //rb_curl_multi_run( self, curl_multi->multi, &running );
-  // multi run
-  while (1) {
-    curl_multi_perform(curl_multi->multi, &running);
-     // procura pelo easy ja terminado
-    if(multi_finished_easy(curl_multi->multi, curl_easy->curl)) {
-      rb_multi_remove_handle(self, rb_easy);
-      break;
-    }
-  }
-  // end multi run
+  rb_curl_multi_run( self, curl_multi->multi, &running );
   
-  running = 0;
   while(running) {
     FD_ZERO(&fdread);
     FD_ZERO(&fdwrite);
@@ -214,24 +173,20 @@ static VALUE multi_perform(VALUE self, VALUE rb_easy) {
 
   }
 
-  return Qnil;
+  return Qtrue;
 }
 
-
 /*
- * rb_new
+ * rb_multi_new
  */
-static VALUE rb_new(int argc, VALUE *argv, VALUE klass) {
-  CurlMulti *curl_multi;
-  VALUE     rb_multi;
-
-  curl_multi = ALLOC(CurlMulti);  
+static VALUE rb_multi_new(VALUE klass)
+{
+  CurlMulti *curl_multi = ALLOC(CurlMulti);
   curl_multi->multi = curl_multi_init();
 
-  rb_multi = Data_Wrap_Struct(rb_cMulti, 0, dealloc, curl_multi);
+  VALUE rb_multi = Data_Wrap_Struct(klass, NULL, dealloc, curl_multi);
 
-  // pass arguments to ruby object
-  rb_obj_call_init(rb_multi, argc, argv);
+  rb_obj_call_init(rb_multi, NULL, NULL);
 
   return rb_multi;
 }
@@ -243,14 +198,14 @@ static VALUE rb_new(int argc, VALUE *argv, VALUE klass) {
 void init_rubycurl_multi() {
   rb_cMulti = rb_define_class_under(rb_mRubyCurl, "Multi", rb_cObject);
 
-  rb_define_singleton_method(rb_cMulti, "new", rb_new, -1);
+  rb_define_singleton_method(rb_cMulti, "new", rb_multi_new, 0);
 
   rb_define_private_method(rb_cMulti, "multi_add_handle",    rb_multi_add_handle,    1);
   rb_define_private_method(rb_cMulti, "multi_remove_handle", rb_multi_remove_handle, 1);
 
   rb_define_private_method(rb_cMulti, "multi_setopt_long",   rb_multi_setopt_long,   2);
 
-  rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       1);
+  rb_define_private_method(rb_cMulti, "multi_perform",       multi_perform,       0);
   //rb_define_private_method(rb_cMulti, "multi_cleanup",       multi_cleanup,       0);
   //rb_define_private_method(rb_cMulti, "active_handle_count", active_handle_count, 0);
 }
