@@ -2,6 +2,7 @@ $LOAD_PATH.unshift(File.dirname(__FILE__))
 
 require 'rubygems'
 require 'rack/utils'
+require 'monitor'
 
 require 'rb_curl'
 

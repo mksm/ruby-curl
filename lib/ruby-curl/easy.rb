@@ -39,7 +39,7 @@ module RubyCurl
 
     def perform
       if @use_cookies and not @jar.empty?
-        easy_append_header("%s: %s" % ['Cookie', @jar])
+        @headers['Cookie'] = @jar.to_s
       end
 
       @headers.each { |k, v| easy_append_header("%s: %s" % [k,v]) }
@@ -51,6 +51,8 @@ module RubyCurl
       else
         easy_perform
       end
+
+      easy_reset
 
       if @save_cookies and headers_hash['Set-Cookie']
         @jar << headers_hash['Set-Cookie']

@@ -14,6 +14,27 @@ static void dealloc(CurlEasy *curl_easy) {
 
 
 /*
+ * Default write function to write to ruby string.
+ * Default handlers for body and headers.
+ */
+
+static size_t write_data_handler(char *stream, size_t size, size_t nmemb, VALUE out) {
+  rb_str_cat(out, stream, size * nmemb);
+  return size * nmemb;
+}
+
+static void set_response_handlers(VALUE easy, CURL *curl) {
+  if (rb_ivar_defined(easy, rb_intern("@body_str")) == Qfalse)   rb_iv_set(easy, "@body_str",   rb_str_new2(""));
+  if (rb_ivar_defined(easy, rb_intern("@header_str")) == Qfalse) rb_iv_set(easy, "@header_str", rb_str_new2(""));
+
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  (curl_write_callback)&write_data_handler);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA,      rb_iv_get(easy, "@body_str"));
+  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, (curl_write_callback)&write_data_handler);
+  curl_easy_setopt(curl, CURLOPT_HEADERDATA,     rb_iv_get(easy, "@header_str"));
+}
+
+
+/*
  * Set options functions based on curl_easy_setopt.
  *
  * These just provide an interface so we can set FLAG's value from ruby.
@@ -29,14 +50,17 @@ static VALUE easy_setopt_string(VALUE self, VALUE opt_name, VALUE parameter) {
   return opt_name;
 }
 
-static VALUE easy_setopt_long(VALUE self, VALUE opt_name, VALUE parameter) {
+static VALUE easy_setopt_long(VALUE self, VALUE option, VALUE value)
+{
   CurlEasy *curl_easy;
   Data_Get_Struct(self, CurlEasy, curl_easy);
 
-  long opt = NUM2LONG(opt_name);
-  curl_easy_setopt(curl_easy->curl, opt, NUM2LONG(parameter));
+  CURLcode rcode = curl_easy_setopt(curl_easy->curl, NUM2LONG(option), NUM2LONG(value));
 
-  return opt_name;
+  if (rcode != CURLE_OK)
+    rb_exc_raise(rb_str_new2(curl_easy_strerror(rcode)));
+
+  return value;
 }
 
 
@@ -78,11 +102,35 @@ static VALUE easy_getinfo_double(VALUE self, VALUE info) {
   return rb_float_new(info_double);
 }
 
+/*
+ * curl_easy_reset
+ */
+static VALUE rb_easy_reset(VALUE self)
+{
+  CurlEasy *curl_easy;
+  Data_Get_Struct(self, CurlEasy, curl_easy);
+
+  if (curl_easy->headers != NULL) {
+    curl_slist_free_all(curl_easy->headers);
+    curl_easy->headers = NULL;
+  }
+
+  curl_easy_reset(curl_easy->curl);
+
+  // save rb_easy in PRIVATE area of handler.
+  curl_easy_setopt(curl_easy->curl, CURLOPT_PRIVATE, self);
+
+  // set default handlers for body and header response.
+  set_response_handlers(self, curl_easy->curl);
+
+  return Qnil;
+}
 
 /*
  * curl_easy_perform
  */
-static VALUE easy_perform(VALUE self) {
+static VALUE easy_perform(VALUE self)
+{
   CurlEasy *curl_easy;
   Data_Get_Struct(self, CurlEasy, curl_easy);
 
@@ -91,12 +139,6 @@ static VALUE easy_perform(VALUE self) {
 
   if (rcode > 0)
     rb_exc_raise(rb_str_new2(curl_easy_strerror(rcode)));
-
-  // Cleanup headers list
-  if (curl_easy->headers != NULL) {
-    curl_slist_free_all(curl_easy->headers);
-    curl_easy->headers = NULL;
-  }
 
   return Qtrue;
 }
@@ -125,38 +167,15 @@ static VALUE easy_setopt_httpheader(VALUE self) {
 
 
 /*
- * Default write function to write to ruby string.
- * Default handlers for body and headers.
+ * rb_new
  */
-
-static size_t write_data_handler(char *stream, size_t size, size_t nmemb, VALUE out) {
-  rb_str_cat(out, stream, size * nmemb);
-  return size * nmemb;
-}
-
-static void set_response_handlers(VALUE easy, CURL *curl) {
-  rb_iv_set(easy, "@body_str",   rb_str_new2(""));
-  rb_iv_set(easy, "@header_str", rb_str_new2(""));
-
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,  (curl_write_callback)&write_data_handler);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA,      rb_iv_get(easy, "@body_str"));
-  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, (curl_write_callback)&write_data_handler);
-  curl_easy_setopt(curl, CURLOPT_HEADERDATA,     rb_iv_get(easy, "@header_str"));
-}
-
-
-/*
- * rb_initialize
- */
-static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
-  CurlEasy *curl_easy;
-  VALUE    rb_easy;
-
-  curl_easy = ALLOC(CurlEasy);
+static VALUE rb_easy_new(VALUE klass)
+{
+  CurlEasy *curl_easy = ALLOC(CurlEasy);
   curl_easy->curl    = curl_easy_init();
   curl_easy->headers = NULL;
-  
-  rb_easy = Data_Wrap_Struct(rb_cEasy, 0, dealloc, curl_easy);
+
+  VALUE rb_easy = Data_Wrap_Struct(klass, NULL, dealloc, curl_easy);
 
   // save rb_easy in PRIVATE area of handler.
   curl_easy_setopt(curl_easy->curl, CURLOPT_PRIVATE, rb_easy);
@@ -164,12 +183,10 @@ static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
   // set default handlers for body and header response.
   set_response_handlers(rb_easy, curl_easy->curl);
 
-  // pass arguments to ruby object
-  rb_obj_call_init(rb_easy, argc, argv);
+  rb_obj_call_init(rb_easy, NULL, NULL);
 
   return rb_easy;
 }
-
 
 /*
  * Ruby interface
@@ -177,7 +194,8 @@ static VALUE rb_initialize(int argc, VALUE *argv, VALUE klass) {
 void init_rubycurl_easy() {
   rb_cEasy = rb_define_class_under(rb_mRubyCurl, "Easy", rb_cObject);
 
-  rb_define_singleton_method(rb_cEasy, "new", rb_initialize, -1);
+  //rb_define_method(rb_cEasy, "initialize", rb_initialize, -1);
+  rb_define_singleton_method(rb_cEasy, "new", rb_easy_new, 0);
   
   rb_define_private_method(rb_cEasy, "easy_setopt_string",      easy_setopt_string,     2);
   rb_define_private_method(rb_cEasy, "easy_setopt_long",        easy_setopt_long,       2);
@@ -186,6 +204,7 @@ void init_rubycurl_easy() {
   rb_define_private_method(rb_cEasy, "easy_getinfo_long",       easy_getinfo_long,      1);
   rb_define_private_method(rb_cEasy, "easy_getinfo_double",     easy_getinfo_double,    1);
 
+  rb_define_private_method(rb_cEasy, "easy_reset",              rb_easy_reset,          0);
   rb_define_private_method(rb_cEasy, "easy_perform",            easy_perform,           0);
 
   rb_define_private_method(rb_cEasy, "easy_append_header",      easy_append_header,     1);
